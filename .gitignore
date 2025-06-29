@@ -1,4 +1,6 @@
 /target
 *.md
 *~
-mesa.data
+*.data
+.idea
+.vscode
