@@ -1,14 +1,16 @@
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::config::{Config, FilterMode};
+
 const DB_HEADER: &str = "mesa database|version=1";
 
 #[derive(Debug)]
 pub struct Entry {
     pub timestamp: u64,
     pub executable: String,
-    pub arguments: Vec<String>,
-    pub runs: u32,
+    pub arguments: String,
+    pub runs: usize,
     pub time_mean: f64,
     pub time_stddev: f64,
 }
@@ -25,9 +27,9 @@ impl FromStr for Entry {
         Ok(Entry {
             timestamp: parts[0].parse().map_err(|e| format!("Invalid timestamp: {}", e))?,
             executable: parts[1].to_string(),
-            arguments: parts[2].split(' ').map(|s| s.to_string()).collect(),
-            time_mean: parts[3].parse().map_err(|e| format!("Invalid execution time: {}", e))?,
-            runs: parts[4].parse().map_err(|e| format!("Invalid run count: {}", e))?,
+            arguments: parts[2].to_string(),
+            runs: parts[3].parse().map_err(|e| format!("Invalid run count: {}", e))?,
+            time_mean: parts[4].parse().map_err(|e| format!("Invalid execution time: {}", e))?,
             time_stddev: parts[5].parse().map_err(|e| format!("Invalid std dev: {}", e))?,
         })
     }
@@ -36,8 +38,22 @@ impl FromStr for Entry {
 impl ToString for Entry {
     fn to_string(&self) -> String {
         format!("{}|{}|{}|{}|{}|{}",
-            self.timestamp, self.executable, self.arguments.join(" "), self.time_mean, self.runs, self.time_stddev
+            self.timestamp, self.executable, self.arguments, self.runs, self.time_mean, self.time_stddev
         )
+    }
+}
+
+impl Entry {
+    pub fn age(&self, from: u64) -> String {
+        let diff_secs = from.saturating_sub(self.timestamp);
+        if diff_secs == 0 {
+            "just now".to_string()
+        } else {
+            let hours = diff_secs / 3600;
+            let minutes = (diff_secs % 3600) / 60;
+            let seconds = diff_secs % 60;
+            format!("{:4}:{:02}:{:02} ago", hours, minutes, seconds)
+        }
     }
 }
 
@@ -92,7 +108,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert(&mut self, executable: &str, arguments: &[String], time_mean: f64) -> Result<(), String> {
+    pub fn insert(&mut self, config: &Config, time_mean: f64, time_stddev: f64) -> Result<(), String> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| format!("Failed to get system time: {}", e))?
@@ -100,14 +116,26 @@ impl Database {
 
         let new_entry = Entry {
             timestamp,
-            executable: executable.to_string(),
-            arguments: arguments.to_vec(),
+            executable: config.executable.to_string(),
+            arguments: config.arguments.join(" ").to_string(),
+            runs: config.runs,
             time_mean,
-            runs: 1,
-            time_stddev: 0.0,
+            time_stddev ,
         };
 
         self.entries.push(new_entry);
         Ok(())
+    }
+
+    pub fn search(&self, cfg: &Config) -> Vec<&Entry> {
+        let arguments = cfg.arguments.join(" ").to_string();
+        self.entries.iter().rev() // rev() so we have them in the order received
+            .filter(|entry| match cfg.filter {
+                FilterMode::All => true,
+                FilterMode::Exe => entry.executable == cfg.executable,
+                FilterMode::Exact => entry.executable == cfg.executable && entry.arguments == arguments,
+            })
+            .take(cfg.show)
+            .collect()
     }
 }

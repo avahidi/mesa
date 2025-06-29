@@ -1,11 +1,21 @@
 use std::env;
 
+#[derive(Debug,PartialEq)]
+pub enum FilterMode {
+    All,
+    Exe,
+    Exact,
+}
 
 #[derive(Debug)]
 pub struct Config {
     pub executable: String,
     pub arguments: Vec<String>,
     pub database: String,
+    pub filter: FilterMode,
+    pub show: usize,
+    pub runs: usize,
+    pub ignore_failure: bool,
 }
 
 impl Config {
@@ -14,6 +24,10 @@ impl Config {
         eprintln!("Usage: {me} [mesa options] -- <program> [program arguments]");
         eprintln!("Where options are:");
         eprintln!("   --database=<filename>          name of time database");
+        eprintln!("   --runs=<number>                number of times target is ran");
+        eprintln!("   --filter=<mode>                filter mode: all, exe, exact");
+        eprintln!("   --show=<number>                max number of items to show");
+        eprintln!("   --ignore                       ignore if application returns non-zero");
         eprintln!("");
 
     }
@@ -25,6 +39,10 @@ impl Config {
     fn new(args: Vec<String>) -> Result<Config, String> {
         // default values
         let mut database = String::from(".mesa.data");
+        let mut filter = FilterMode::Exact;
+        let mut show = 5;
+        let mut runs = 1;
+        let mut ignore_failure = false;
 
         // separate our own and targets arguments
         let sep_pos = args.iter().position(|arg| arg == "--");
@@ -39,6 +57,16 @@ impl Config {
             if let Some((key, value)) = arg.split_once('=') {
                 match key {
                     "-d" | "--database" => database = value.to_string(),
+                    "-f" | "--filter" => filter = match value {
+                        "all" => FilterMode::All,
+                        "exe" => FilterMode::Exe,
+                        "exact" => FilterMode::Exact,
+                        _ => return Err(format!("Unknown mode: {}", arg)),
+                    },
+                    "-s" | "--show" =>
+                        show = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
+                    "-r" | "--runs" =>
+                        runs = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
                     _ => return Err(format!("Unknown parameter: {}", arg)),
                 }
             } else {
@@ -47,6 +75,7 @@ impl Config {
                         Config::help();
                         std::process::exit(0); // Exit successfully
                     },
+                    "-i" | "--ignore" => ignore_failure = true,
                     _ => return Err(format!("Unknown parameter: {}", arg)),
                 }
             }
@@ -68,9 +97,12 @@ impl Config {
             executable: yours[0].clone(),
             arguments: yours[1..].to_vec(),
             database,
+            filter,
+            show,
+            runs,
+            ignore_failure,
         })
     }
-
 }
 
 #[cfg(test)]
@@ -78,32 +110,39 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_no_args() {
+    fn test_bad_args() {
         let args = vec![];
         let config = Config::new(args);
         assert!(config.is_err());
-    }
 
-    #[test]
-    fn test_no_arguments() {
         let args = vec!["--".to_string()];
+        let config = Config::new(args);
+        assert!(config.is_err());
+
+        let args = vec!["-i".to_string(), "--".to_string()];
         let config = Config::new(args);
         assert!(config.is_err());
     }
 
     #[test]
-    fn test_no_program_executable() {
-        let args = vec!["--".to_string()];
-        let config = Config::new(args);
-        assert!(config.is_err());
-    }
-
-    #[test]
-    fn test_valid_config() {
-        let args = vec!["--database=test.db".to_string(), "--".to_string(), "ls".to_string(), "-l".to_string()];
+    fn test_config_options() {
+        let args: Vec<String> = vec![
+            "--database=/this/that/mesa.data",
+            "--filter=all",
+            "--show=10",
+            "--runs=17",
+            "--ignore",
+            "--",
+            "proggy",
+            "arg1",
+        ].into_iter().map(String::from).collect();
         let config = Config::new(args).unwrap();
-        assert_eq!(config.database, "test.db");
-        assert_eq!(config.executable, "ls");
-        assert_eq!(config.arguments, vec!["-l"]);
+        assert_eq!(config.database, "/this/that/mesa.data");
+        assert_eq!(config.filter, FilterMode::All);
+        assert_eq!(config.show, 10);
+        assert_eq!(config.runs, 17);
+        assert_eq!(config.ignore_failure, true);
+        assert_eq!(config.executable, "proggy");
+        assert_eq!(config.arguments, vec!["arg1"]);
     }
 }
