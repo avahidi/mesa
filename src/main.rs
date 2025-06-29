@@ -6,6 +6,11 @@ use std::time::{Instant, Duration, SystemTime, UNIX_EPOCH};
 use crate::config::Config;
 use crate::database::{Database, Entry};
 
+const BOLD: &str = "\x1B[1m";
+const RED: &str = "\x1B[31m";
+const GREEN: &str = "\x1B[32m";
+const RESET: &str = "\x1B[0m";
+
 fn execute_once(config: &Config) -> Result<Duration, String> {
     let mut command = Command::new(&config.executable);
     command.args(&config.arguments);
@@ -36,18 +41,19 @@ fn execute(config: &Config) -> Result<(f64, f64), String> {
     Ok((mean, std_dev))
 }
 
-fn show(measurements: Vec<&Entry>) -> Result<(), String> {
+fn show(measurements: Vec<&Entry>) {
     if measurements.is_empty() {
-        println!("No previous runs to show.");
-        return Ok(());
+        return
     }
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| format!("Failed to get system time: {}", e))?.as_secs();
+        .expect("save yourself, end of time is here") // no point recovering from this :(
+        .as_secs();
 
     // figure out what data we want to print, starting with the headers
     let mut columns: Vec<Vec<String>> = vec![
+        vec!["".to_string()], // New column for color
         vec!["Age".to_string()],
         vec!["Executable".to_string()],
         vec!["Arguments".to_string()],
@@ -57,42 +63,56 @@ fn show(measurements: Vec<&Entry>) -> Result<(), String> {
         vec!["Change (%)".to_string()],
     ];
 
-    columns[0].extend(measurements.iter().map(|entry| entry.age(now)));
-    columns[1].extend(measurements.iter().map(|entry| entry.executable.clone()));
-    columns[2].extend(measurements.iter().map(|entry| entry.arguments.clone()));
-    columns[3].extend(measurements.iter().map(|entry| entry.runs.to_string()));
-    columns[4].extend(measurements.iter().map(|entry| format!("{:.4}", entry.time_mean)));
-    columns[5].extend(measurements.iter().map(|entry| format!("{:.4}", entry.time_stddev)));
+    // set color for header and anything over 1% better or worse
+    let mut first_mean = measurements.first().map(|entry| entry.time_mean).unwrap();
+    if first_mean <= 0.0 {
+        first_mean = 0.00001f64; // avoid divide by zero
+    }
+    columns[0].extend(measurements.iter().enumerate().map(|(i, entry)| {
+        let modifier = if i == 0 {
+            BOLD
+        } else if entry.time_mean * 1.01 < first_mean {
+            RED
+        } else if entry.time_mean > first_mean * 1.01 {
+            GREEN
+        } else {
+            ""
+        };
+        modifier.to_string()
+    }));
 
-    let first_mean = measurements.first().map(|entry| entry.time_mean).unwrap_or(0.0);
-    columns[6].extend(measurements.iter().enumerate().map(|(i, entry)| {
+    columns[1].extend(measurements.iter().map(|entry| entry.age(now)));
+    columns[2].extend(measurements.iter().map(|entry| entry.executable.clone()));
+    columns[3].extend(measurements.iter().map(|entry| entry.arguments.clone()));
+    columns[4].extend(measurements.iter().map(|entry| entry.runs.to_string()));
+    columns[5].extend(measurements.iter().map(|entry| format!("{:.4}", entry.time_mean)));
+    columns[6].extend(measurements.iter().map(|entry| format!("{:.4}", entry.time_stddev)));
+    columns[7].extend(measurements.iter().enumerate().map(|(i, entry)| {
         if i == 0 {
             " ".to_string() // Empty string for the first entry
-        } else if first_mean == 0.0 {
-            "N/A".to_string()
         } else {
             format!("{:.2}", ((entry.time_mean - first_mean) / first_mean) * 100.0)
         }
     }));
 
     // to print a nice table we will need to know max width for each column
-    let widths: Vec<usize> = columns.iter().map(|col| {
-        col.iter().map(|s| s.len()).max().unwrap_or(0)
-    }).collect();
+    let widths: Vec<usize> = columns.iter()
+        .map(|col| col.iter().map(|s| s.len()).max().unwrap_or(0) + 2 )
+        .collect();
 
     // lets print the table now
     for i in 0..columns[0].len() {
-        let row_strings: Vec<String> = columns.iter().zip(&widths).enumerate()
-            .map(|(_j, (col, w))| format!("{:>width$}", col[i], width = w) )
+        let color_prefix = &columns[0][i];
+        let row_strings: Vec<String> = columns.iter().skip(1).zip(&widths.iter().skip(1).collect::<Vec<_>>()).enumerate()
+            .map(|(_j, (col, w))| format!("{:^width$}", col[i], width = w) )
             .collect();
-        println!("{}", row_strings.join(" "));
+        println!("{}{}{}", color_prefix, row_strings.join("|"), RESET);
 
         // line separator between header and data
         if i == 0 {
-            println!("{}", widths.iter().map(|w| "-".repeat(*w)).collect::<Vec<_>>().join(" ") );
+            println!("{}", widths.iter().skip(1).map(|w| "-".repeat(*w)).collect::<Vec<_>>().join("+") );
         }
     }
-    Ok(())
 }
 
 fn main() -> Result<(), String> {
@@ -111,7 +131,7 @@ fn main() -> Result<(), String> {
 
     // show me what you get
     let search_result = db.search(&config);
-    show(search_result)?;
+    show(search_result);
 
     Ok(())
 }

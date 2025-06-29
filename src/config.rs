@@ -39,7 +39,7 @@ impl Config {
     fn new(args: Vec<String>) -> Result<Config, String> {
         // default values
         let mut database = String::from(".mesa.data");
-        let mut filter = FilterMode::Exact;
+        let mut filter = FilterMode::Exe;
         let mut show = 5;
         let mut runs = 1;
         let mut ignore_failure = false;
