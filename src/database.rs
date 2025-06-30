@@ -3,13 +3,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config::{Config, FilterMode};
 
-const DB_HEADER: &str = "mesa database|version=1";
+const DB_HEADER: &str = "mesa database|version=1.1";
 
 #[derive(Debug)]
 pub struct Entry {
     pub timestamp: u64,
     pub executable: String,
     pub arguments: String,
+    pub note: String,
     pub runs: usize,
     pub time_mean: f64,
     pub time_stddev: f64,
@@ -20,7 +21,7 @@ impl FromStr for Entry {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts: Vec<&str> = s.split('|').collect();
-        if parts.len() != 6 {
+        if parts.len() != 7 {
             return Err(format!("Invalid entry format: {}", s));
         }
 
@@ -31,14 +32,16 @@ impl FromStr for Entry {
             runs: parts[3].parse().map_err(|e| format!("Invalid run count: {}", e))?,
             time_mean: parts[4].parse().map_err(|e| format!("Invalid execution time: {}", e))?,
             time_stddev: parts[5].parse().map_err(|e| format!("Invalid std dev: {}", e))?,
+            note: parts[6].to_string(),
         })
     }
 }
 
 impl ToString for Entry {
     fn to_string(&self) -> String {
-        format!("{}|{}|{}|{}|{}|{}",
-            self.timestamp, self.executable, self.arguments, self.runs, self.time_mean, self.time_stddev
+        format!("{}|{}|{}|{}|{}|{}|{}",
+                self.timestamp, self.executable, self.arguments, self.runs,
+                self.time_mean, self.time_stddev, self.note,
         )
     }
 }
@@ -116,8 +119,9 @@ impl Database {
 
         let new_entry = Entry {
             timestamp,
-            executable: config.executable.to_string(),
+            executable: config.executable.clone(),
             arguments: config.arguments.join(" ").to_string(),
+            note: config.note.clone(),
             runs: config.runs,
             time_mean,
             time_stddev ,
