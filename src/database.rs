@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::config::{Config, FilterMode};
 
-const DB_HEADER: &str = "mesa database|version=1.1";
+const DB_HEADER: &str = "# mesa database|github.com/avahidi/mesa|version=1.2";
 
 #[derive(Debug)]
 pub struct Entry {

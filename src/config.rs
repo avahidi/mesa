@@ -17,8 +17,10 @@ pub struct Config {
     pub filter: FilterMode,
     pub show: usize,
     pub runs: usize,
+    pub runs_warmup: usize,
     pub ignore_failure: bool,
     pub dry_run: bool,
+    pub verbose: bool,
 }
 
 impl Config {
@@ -30,8 +32,10 @@ impl Config {
         eprintln!("   --output=<filename>            output file (CSV/JSON/TXT/XML/...) or stdout");
         eprintln!("   --note=...                     description about this run");
         eprintln!("   --runs=<number>                number of times target is run");
+        eprintln!("   --warups=<number>              number of warm up runs before the measurement");
         eprintln!("   --filter=<mode>                filter mode: all, exe, exact");
         eprintln!("   --show=<number>                max number of items to show");
+        eprintln!("   --verbose                      be more verbose");
         eprintln!("   --ignore                       ignore if application returns non-zero");
         eprintln!("   --dry-run                      do not save this run to the database");
 
@@ -45,14 +49,16 @@ impl Config {
 
     fn new(args: Vec<String>) -> Result<Config, String> {
         // default values
-        let mut database = String::from(".mesa.data");
+        let mut database = String::from("timing.mesa");
         let mut output = String::from("stdout");
         let mut note = String::from("");
         let mut filter = FilterMode::Exe;
         let mut show = 5;
         let mut runs = 1;
+        let mut runs_warmup = 0;
         let mut ignore_failure = false;
         let mut dry_run = false;
+        let mut verbose = false;
 
         // separate our own and targets arguments
         let sep_pos = args.iter().position(|arg| arg == "--");
@@ -80,6 +86,8 @@ impl Config {
                         show = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
                     "-r" | "--runs" =>
                         runs = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
+                    "-w" | "--warmups" =>
+                        runs_warmup = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
                     _ => return Err(format!("Unknown parameter: {}", arg)),
                 }
             } else {
@@ -89,7 +97,8 @@ impl Config {
                         std::process::exit(0); // Exit successfully
                     },
                     "-i" | "--ignore" => ignore_failure = true,
-                    "--dry-run" => dry_run = true,
+                    "-N" | "--dry-run" => dry_run = true,
+                    "-V" | "--verbose" => verbose = true,
                     _ => return Err(format!("Unknown parameter: {}", arg)),
                 }
             }
@@ -116,8 +125,10 @@ impl Config {
             filter,
             show,
             runs,
+            runs_warmup,
             ignore_failure,
             dry_run,
+            verbose,
         })
     }
 }

@@ -2,6 +2,7 @@
 *.md
 *~
 *.data
+timing.mesa
 .idea
 .vscode
 TODO
