@@ -52,10 +52,15 @@ impl Entry {
         if diff_secs == 0 {
             "just now".to_string()
         } else {
-            let hours = diff_secs / 3600;
-            let minutes = (diff_secs % 3600) / 60;
-            let seconds = diff_secs % 60;
-            format!("{:4}:{:02}:{:02} ago", hours, minutes, seconds)
+            let days = diff_secs / (60 * 60 * 24);
+            if days >= 7 {
+                format!("{} days ago", days)
+            } else {
+                let hours = diff_secs / 3600;
+                let minutes = (diff_secs % 3600) / 60;
+                let seconds = diff_secs % 60;
+                format!("{:4}:{:02}:{:02} ago", hours, minutes, seconds)
+            }
         }
     }
 }
@@ -94,6 +99,9 @@ impl Database {
             .map(|line| line.parse::<Entry>())
             .collect::<Result<Vec<Entry>, _>>()
             .map_err(|e| format!("Failed to parse entry: {}", e))?;
+
+        // make sure input is sorted, in case someone edited database by hand
+        self.entries.sort_by(|a, b| a.timestamp.cmp(&b.timestamp)) ;
 
         Ok(())
     }

@@ -1,7 +1,7 @@
 MESA
 ====
 
-*mesa* is a command line utility for recording and comparing execution times. You can use it to track performance of an application over time.
+*mesa* is a command line utility for recording and comparing execution times. You can use it to track performance of applications you are developing over time.
 
 Usage
 -----
@@ -126,7 +126,7 @@ This was a smaller improvement than anticipated, highlighting the importance of 
 Measurement database
 --------------------
 
-The mesa database is a file where the measurements are stored, and developers might want to include it in their version control system. By default this file is called "timing.mesa" in the current folder, although that can be changed using the `--database` option.
+The mesa database is the file where measurements are stored, and developers might want to include it in their version control system. By default this file is called "timing.mesa" in the current folder, although that can be changed using the `--database` option.
 
 The v1.2 file format looks like this:
 
@@ -144,7 +144,7 @@ Output format
 
 By default output is written to the console as a table. This can however be changed by specifying `--output=<filename.ext>`, where the extension decides the output format (accepted extensions are: txt, xml, csv and json).
 
-The filename *stdout* is assumed to mean the standard output and not a file. For example, this will dump a JSON file out stdout instead of creating the file stdout.json:
+The filename *stdout* is assumed to mean the standard output and not a file. For example, this will dump JSON to stdout instead of creating the file stdout.json:
 
 .. code-block:: console
 

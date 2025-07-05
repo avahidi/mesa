@@ -30,9 +30,9 @@ impl Config {
         eprintln!("Where options are:");
         eprintln!("   --database=<filename>          name of time database");
         eprintln!("   --output=<filename>            output file (CSV/JSON/TXT/XML/...) or stdout");
-        eprintln!("   --note=...                     description about this run");
+        eprintln!("   --note=<note>                  description about this run");
         eprintln!("   --runs=<number>                number of times target is run");
-        eprintln!("   --warups=<number>              number of warm up runs before the measurement");
+        eprintln!("   --warmups=<number>             number of warm up runs before the measurement");
         eprintln!("   --filter=<mode>                filter mode: all, exe, exact");
         eprintln!("   --show=<number>                max number of items to show");
         eprintln!("   --verbose                      be more verbose");

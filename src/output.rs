@@ -16,13 +16,17 @@ pub fn write_output(output: &str, measurements: Vec<&Entry>) -> Result<(), Strin
     let stem = path.file_stem().and_then(OsStr::to_str).unwrap_or("");
     let ext = path.extension().and_then(OsStr::to_str).unwrap_or("");
 
-    let writer = match stem {
-        "" | "stdout" => Box::new(io::stdout()) as Box<dyn Write>,
-        _ => Box::new(File::create(&path).unwrap()) as Box<dyn Write>,
+    let terminal = stem == "" || stem == "stdout";
+
+    let writer = if terminal {
+        Box::new(io::stdout()) as Box<dyn Write>
+    } else {
+        let file = File::create(&path).map_err(|e| format!("Unable to create output file: {:?}", e))?;
+        Box::new(file) as Box<dyn Write>
     };
 
     match ext {
-        "" | "txt" | "table" => output_table(writer, measurements),
+        "" | "txt" | "table" => output_table(writer, terminal, measurements),
         "csv" => output_csv(writer, measurements),
         "json" => output_json(writer, measurements),
         "xml" => output_xml(writer, measurements),
@@ -30,7 +34,7 @@ pub fn write_output(output: &str, measurements: Vec<&Entry>) -> Result<(), Strin
     }.map_err(|_| format!("write output failed"))
 }
 
-fn output_table(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(), io::Error> {
+fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>) -> Result<(), io::Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("save yourself, end of time is here") // no point recovering from this :(
@@ -57,18 +61,20 @@ fn output_table(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(),
     }
 
 
-    const BOLD: &str = "\x1B[1m";
-    const RED: &str = "\x1B[31m";
-    const GREEN: &str = "\x1B[32m";
-    const RESET: &str = "\x1B[0m";
+    // use colors only if requested
+    let (red, green, bold, reset) = if color {
+        ("\x1B[31m", "\x1B[32m", "\x1B[1m", "\x1B[0m")
+    } else {
+        ("", "", "", "")
+    };
 
     columns[0].extend(measurements.iter().enumerate().map(|(i, entry)| {
         let modifier = if i == 0 {
-            BOLD
+            bold
         } else if entry.time_mean * 1.01 < first_mean {
-            RED
+            red
         } else if entry.time_mean > first_mean * 1.01 {
-            GREEN
+            green
         } else {
             ""
         };
@@ -101,7 +107,8 @@ fn output_table(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(),
         let row_strings: Vec<String> = columns.iter().skip(1).zip(&widths.iter().skip(1).collect::<Vec<_>>()).enumerate()
             .map(|(_j, (col, w))| format!("{:^width$}", col[i], width = w) )
             .collect();
-        write!(wr, "{}{}{}\n", color_prefix, row_strings.join("|"), RESET)?;
+
+        write!(wr, "{}{}{}\n", color_prefix, row_strings.join("|"), reset)?;
 
         // line separator between header and data
         if i == 0 {
