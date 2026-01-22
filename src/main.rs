@@ -59,8 +59,8 @@ fn main() -> Result<(), String> {
     // warmup round:
     let (mean, std_dev) = execute(&config, config.runs_warmup)?;
     if config.runs_warmup > 0 && config.verbose {
-        println!("After {} warmup roounds: mean={:3.3}s stddev={:3.3}",
-                 config.runs_warmup, mean,std_dev);
+        println!("After {} warmup rounds: mean={:3.3}s stddev={:3.3}",
+                 config.runs_warmup, mean, std_dev);
     }
 
     // real rounds

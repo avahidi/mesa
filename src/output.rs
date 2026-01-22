@@ -147,7 +147,7 @@ fn output_json(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(), 
              write!(wr, ",\n")?;
         }
         write!(wr, " {{\"timestamp\": {}, \"executable\": \"{}\", \"arguments\": \"{}\",  \
-                    \"runs\": {}, \"mean\": {:3.3}, \"stddev\": {:3.3}, \"{}\"}}",
+                    \"runs\": {}, \"mean\": {:3.3}, \"stddev\": {:3.3}, \"note\": \"{}\"}}",
                m.timestamp, escape_json(&m.executable), escape_json(&m.arguments),
                m.runs, m.time_mean, m.time_stddev, escape_json(&m.note) )?;
     }

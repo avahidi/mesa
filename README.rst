@@ -1,23 +1,31 @@
-MESA
+mesa
 ====
 
-*mesa* is a command line utility for recording and comparing execution times. You can use it to track performance of applications you are developing over time.
+*mesa* is a command line utility for recording and comparing execution times. Instead of manually measuring performance with ``time``, mesa automates measurements across multiple runs and tracks your changes in a human-readable database.
 
-Usage
------
 
-To measure the execution time of a command, run it with `mesa`:
+Quick start
+-----------
+
+Run any command with mesa to measure its execution time:
 
 .. code-block:: console
 
-    $ mesa [mesa flags] -- <command plus arguments>
 
-The `--` is used to separate `mesa`'s own arguments from the arguments for the command being executed.
+    $ mesa -- python3 fibonacci.py 30
+    
+       Age    | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | ...
+    ----------+------------+-----------------+------+----------+------------+-----
+     just now |  python3   | fibonacci.py 30 |  1   |  0.1484  |   0.0000   | ...
 
-Example: improving Fibonacci
-----------------------------
 
-Assume we have an implementation of Fibonacci in python:
+That's it. Mesa records the time, and you can run the same command again later to compare.
+
+
+A slightly longer example: tracking Fibonacci improvements
+----------------------------------------------------------
+
+Suppose you have a slow Fibonacci implementation and want to optimise it systematically:
 
 .. code-block:: python
 
@@ -30,33 +38,30 @@ Assume we have an implementation of Fibonacci in python:
     import sys
     print(fib(int(sys.argv[1])))
 
-We would like to improve this code in a systematic manner, and document if our changes lead to an actual performance improvement.
-One way to do this is to run the UNIX utility *time* manually after every change:
+You could run ``time`` manually after each change, but this is tedious. And a single run can contain some noise. More importantly, how do you keep track of all these numbers?
 
-.. code-block:: console
 
-    $ time python3 fibonacci.py 30
-    832040
+The Solution
+~~~~~~~~~~~~
 
-    real    0m0.183s
-    user    0m0.174s
-    sys     0m0.010s
-
-But this gets cumbersome very quickly. Furthermore a single run can contain a lot of system noise.
-
-Let us address both issues by using *mesa* to automate this process and also record the average of multiple runs.
-We start by recording execution time for our original code to establish a baseline:
+Mesa solves this by automating measurements and averaging multiple runs. Start by establishing a baseline with your original code:
 
 
 .. code-block:: console
 
-    $ mesa --runs=10 --database=fibonacci.perf --note="original code" -- python3 fibonacci.py 30
+    $ mesa --runs=10 --database=fibonacci.mesa --note="original code" -- python3 fibonacci.py 30
 
        Age    | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | Change (%) |     Note
     ----------+------------+-----------------+------+----------+------------+------------+---------------
      just now |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |            | original code
 
-Note that we only measure wall clock time. Next, assume we made some changes and want to see if those improve performance:
+Mesa ran the command 10 times, averaging the results to reduce noise. The measurements are now stored in ``fibonacci.mesa`` for future comparisons. Notice that both mean and standard deviation of execution time are recorded.
+
+
+Iteration 1: a tiny improvement
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Let's make a small optimisation:
 
 
 .. code-block:: python
@@ -67,14 +72,17 @@ Note that we only measure wall clock time. Next, assume we made some changes and
 
 .. code-block:: console
 
-    $ mesa --runs=10 --database=fibonacci.perf --note="removed one if" -- python3 fibonacci.py 30
+    $ mesa --runs=10 --database=fibonacci.mesa --note="removed one if" -- python3 fibonacci.py 30
 
           Age       | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | Change (%) |      Note
     ----------------+------------+-----------------+------+----------+------------+------------+----------------
         just now    |  python3   | fibonacci.py 30 |  10  |  0.1442  |   0.0186   |            | removed one if
         0:01:54 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |    3.82    | original code
 
-Surprisingly, that actually improved performance a tiny bit. Our next improvement idea is adding an ad-hoc cache (aka.`memoization`):
+Looks like that improved performance a bit. Note that this tiny 3.82% improvement would probably have drowned in system noise had we used ``time``...
+
+Iteration 2: adding memoization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 .. code-block:: python
@@ -90,16 +98,19 @@ Surprisingly, that actually improved performance a tiny bit. Our next improvemen
 
 .. code-block:: console
 
-    $ mesa --runs=10 --database=fibonacci.perf --note="memoization" -- python3 fibonacci.py 30
+    $ mesa --runs=10 --database=fibonacci.mesa --note="memoization" -- python3 fibonacci.py 30
 
           Age       | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | Change (%) |      Note
     ----------------+------------+-----------------+------+----------+------------+------------+----------------
-        just now    |  python3   | fibonacci.py 30 |  10  |  0.0369  |   0.0007   |            |  memoization
+        just now    |  python3   | fibonacci.py 30 |  10  |  0.0369  |   0.0007   |            | memoization
         0:01:25 ago |  python3   | fibonacci.py 30 |  10  |  0.1442  |   0.0186   |   290.57   | removed one if
         0:03:19 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |   305.47   | original code
 
+That is a massive improvement of 305% over baseline and 291% over our previous version!
+But can we do even better? Maybe by removing recursion altogether?
 
-This was a clear improvement, but surely the  optimal solution would be to eliminate recursive calls altogether?
+Iteration 3: eliminate recursion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -111,24 +122,39 @@ This was a clear improvement, but surely the  optimal solution would be to elimi
 
 .. code-block:: console
 
-    $ mesa --runs=10 --database=fibonacci.perf --note="not recursive" -- python3 fibonacci.py 30
+    $ mesa --runs=10 --database=fibonacci.mesa --note="iterative" -- python3 fibonacci.py 30
 
           Age       | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | Change (%) |      Note
     ----------------+------------+-----------------+------+----------+------------+------------+----------------
-        just now    |  python3   | fibonacci.py 30 |  10  |  0.0361  |   0.0005   |            | not recursive
-        0:12:35 ago |  python3   | fibonacci.py 30 |  10  |  0.0369  |   0.0007   |    2.24    |  memoization
+        just now    |  python3   | fibonacci.py 30 |  10  |  0.0361  |   0.0005   |            | iterative
+        0:12:35 ago |  python3   | fibonacci.py 30 |  10  |  0.0369  |   0.0007   |    2.24    | memoization
         0:14:00 ago |  python3   | fibonacci.py 30 |  10  |  0.1442  |   0.0186   |   299.32   | removed one if
         0:15:54 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |   314.56   | original code
 
 
-This was a smaller improvement than anticipated, highlighting the importance of empirical measurement. This is exactly why I wrote *mesa*: to replace opinions and feelings with hard facts that can be tracked in a git repository.
+Only 2.24%? This was a smaller improvement than anticipated, highlighting the importance of empirical measurement.
+This is exactly why I wrote mesa: to replace opinions and feelings with hard facts that can be stored in your git repository.
 
-Measurement database
+
+Command-line options
 --------------------
+Some key command-line options:
 
-The mesa database is the file where measurements are stored, and developers might want to include it in their version control system. By default this file is called "timing.mesa" in the current folder, although that can be changed using the `--database` option.
+ * ``--runs=N``: number of runs. Mesa averages measurements across several runs to reduce system noise
+ * ``--warmups=N``: number of warm ups before starting measurement
+ * ``--database=filename.mesa``: measurements are stored in this plain-text file (default ``timing.mesa``)
+ * ``--note="description"``: adds context to each measurement. You could for example set this to your commit identifier.
+ * ``--output=filename.ext``: export results to this file. Format depends on the extension, see below 
 
-The v1.2 file format looks like this:
+
+.. code-block:: console
+
+    mesa --output=results.csv ...     # CSV format
+    mesa --output=results.json ...    # JSON format
+    mesa --output=results.xml ...     # XML format
+    mesa --output=stdout.json ...     # If file name is 'stdout', it will be written to console instead
+
+The measurements database is a simple plain-text file:
 
 .. code-block::
 
@@ -137,42 +163,28 @@ The v1.2 file format looks like this:
     <timestamp>|<executable>|<arguments>|<runs>|<mean>|<stddev>|<note>
     ...
 
-It is assumed that the entries are sorted by timestamp.
-
-Output format
--------------
-
-By default output is written to the console as a table. This can however be changed by specifying `--output=<filename.ext>`, where the extension decides the output format (accepted extensions are: txt, xml, csv and json).
-
-The filename *stdout* is assumed to mean the standard output and not a file. For example, this will dump JSON to stdout instead of creating the file stdout.json:
-
-.. code-block:: console
-
-    mesa --output=stdout.json ...
-
-Although why anyone would want to do something like that is beyond me.
+This makes it easy to diff changes in git and understand your performance history over time.
 
 
-Development
------------
+Building from Source
+---------------------
 
-*mesa* was developed in Rust and does not use any external libraries.
-
-To build it from source and run it directly from cargo try this:
+*mesa* is written in Rust with no external dependencies:
 
 .. code-block:: console
 
     git clone https://github.com/avahidi/mesa
     cd mesa
     cargo build
-    cargo run -- -- sleep 1
+    cargo run -- -- sleep 1 # test it :)
 
-Misc.
------
 
-The name *mesa* is either a play on the word *measurement* or the Swedish word *"mes"* (*coward*). Pick whichever suits you.
+About the Name
+--------------
+
+The name *mesa* is a play on the word *measurement*, or possibly a play on the Swedish word *"mes"* (coward). Pick whichever suits you.
 
 License
 -------
 
-This utility is licensed under GNU General Public License version 2.
+Licensed under GNU General Public License version 2.
