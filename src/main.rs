@@ -1,9 +1,10 @@
 use std::process::{Command, Stdio};
-use std::time::{Instant, Duration};
+use std::time::Instant;
+
 
 use mesa::*;
 
-fn execute_once(config: &Config) -> Result<Duration, String> {
+fn execute_once(config: &Config) -> Result<f64, String> {
     let mut command = Command::new(&config.executable);
     command.args(&config.arguments)
         .stdout(Stdio::piped())
@@ -14,8 +15,18 @@ fn execute_once(config: &Config) -> Result<Duration, String> {
     let output = command
         .output().map_err(|e| format!("Error executing program: {}", e))?;
 
-    // elapsed is up here to not not include the verbose print time below
-    let elapsed = start_time.elapsed();
+    // value is up here to not not include the verbose print time below
+    let value = match &config.capture {
+        Some(capture) => {
+            // we are measuring something else
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let cap = capture.extract(&stdout).ok_or("search pattern not found")?;
+            cap.as_str().trim().parse::<f64>()
+                .map_err(|_| format!("Captured text {} is not a valid number", cap))?
+        },
+        _ => start_time.elapsed().as_secs_f64()
+    };
+
 
     if config.verbose {
         print!("{}", String::from_utf8_lossy(&output.stdout));
@@ -26,7 +37,7 @@ fn execute_once(config: &Config) -> Result<Duration, String> {
     if !status.success() && !config.ignore_failure {
         Err( format!("Program failed with error code {}", status) )
     } else {
-        Ok( elapsed )
+        Ok( value )
     }
 }
 
@@ -35,7 +46,7 @@ fn execute(config: &Config, count: usize) -> Result<(f64, f64), String> {
         return Ok((0.0, 0.0));
     }
     let durations: Vec<f64> = (0..count)
-        .map(|_| execute_once(config).map(|d| d.as_secs_f64()))
+        .map(|_| execute_once(config))
         .collect::<Result<Vec<f64>, String>>()?;
 
     let sum: f64 = durations.iter().sum();
@@ -74,5 +85,5 @@ fn main() -> Result<(), String> {
 
     // show me what you get
     let search_result = db.search(&config);
-    write_output(&config.output, search_result)
+    write_output(&config.output, search_result, config.reverse)
 }

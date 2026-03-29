@@ -6,9 +6,14 @@ use std::fs::{File};
 
 use crate::*;
 
-pub fn write_output(output: &str, measurements: Vec<&Entry>) -> Result<(), String> {
+pub fn write_output(output: &str, measurements: Vec<&Entry>, reverse: bool) -> Result<(), String> {
     if measurements.is_empty() {
         eprintln!("Nothing to output...");
+        return Ok(());
+    }
+
+    if output.is_empty() {
+        // no output requested
         return Ok(());
     }
 
@@ -26,7 +31,7 @@ pub fn write_output(output: &str, measurements: Vec<&Entry>) -> Result<(), Strin
     };
 
     match ext {
-        "" | "txt" | "table" => output_table(writer, terminal, measurements),
+        "" | "txt" | "table" => output_table(writer, terminal, measurements, reverse),
         "csv" => output_csv(writer, measurements),
         "json" => output_json(writer, measurements),
         "xml" => output_xml(writer, measurements),
@@ -34,7 +39,7 @@ pub fn write_output(output: &str, measurements: Vec<&Entry>) -> Result<(), Strin
     }.map_err(|_| format!("write output failed"))
 }
 
-fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>) -> Result<(), io::Error> {
+fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>, reverse: bool) -> Result<(), io::Error> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("save yourself, end of time is here") // no point recovering from this :(
@@ -47,15 +52,15 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>) 
         vec!["Executable".to_string()],
         vec!["Arguments".to_string()],
         vec!["Runs".to_string()],
-        vec!["Mean (s)".to_string()],
-        vec!["StdDev (s)".to_string()],
+        vec!["Mean".to_string()],
+        vec!["StdDev".to_string()],
         vec!["Change (%)".to_string()],
         vec!["Note".to_string()],
 
     ];
 
     // set color for header and anything over 1% better or worse
-    let mut first_mean = measurements.first().map(|entry| entry.time_mean).unwrap();
+    let mut first_mean = measurements.first().map(|entry| entry.mean).unwrap();
     if first_mean <= 0.0 {
         first_mean = 0.00001f64; // avoid divide by zero
     }
@@ -71,12 +76,14 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>) 
     columns[0].extend(measurements.iter().enumerate().map(|(i, entry)| {
         let modifier = if i == 0 {
             bold
-        } else if entry.time_mean * 1.01 < first_mean {
-            red
-        } else if entry.time_mean > first_mean * 1.01 {
-            green
         } else {
-            ""
+            if (entry.mean * 1.01 < first_mean) == reverse  {
+                green
+            } else if (entry.mean > first_mean * 1.01) == reverse {
+                red
+            } else {
+                ""
+            }
         };
         modifier.to_string()
     }));
@@ -85,13 +92,20 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>) 
     columns[2].extend(measurements.iter().map(|entry| entry.executable.clone()));
     columns[3].extend(measurements.iter().map(|entry| entry.arguments.clone()));
     columns[4].extend(measurements.iter().map(|entry| entry.runs.to_string()));
-    columns[5].extend(measurements.iter().map(|entry| format!("{:.4}", entry.time_mean)));
-    columns[6].extend(measurements.iter().map(|entry| format!("{:.4}", entry.time_stddev)));
+    columns[5].extend(measurements.iter().map(|entry| format!("{:.4}", entry.mean)));
+    columns[6].extend(measurements.iter().map(|entry| {
+        if entry.runs > 1 {
+            format!("{:.4}", entry.stddev)
+        } else {
+            "".to_string() // no point printing stddev if we only had one run...
+        }
+    }));
+
     columns[7].extend(measurements.iter().enumerate().map(|(i, entry)| {
         if i == 0 {
             " ".to_string() // Empty string for the first entry
         } else {
-            format!("{:.2}", ((entry.time_mean - first_mean) / first_mean) * 100.0)
+            format!("{:.2}", ((first_mean - entry.mean) / first_mean) * 100.0)
         }
     }));
     columns[8].extend(measurements.iter().map(|entry| entry.note.to_string()));
@@ -104,7 +118,7 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>) 
     // lets print the table now
     for i in 0..columns[0].len() {
         let color_prefix = &columns[0][i];
-        let row_strings: Vec<String> = columns.iter().skip(1).zip(&widths.iter().skip(1).collect::<Vec<_>>()).enumerate()
+        let row_strings: Vec<String> = columns.iter().skip(1).zip(widths.iter().skip(1)).enumerate()
             .map(|(_j, (col, w))| format!("{:^width$}", col[i], width = w) )
             .collect();
 
@@ -115,6 +129,7 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>) 
             write!(wr, "{}\n", widths.iter().skip(1).map(|w| "-".repeat(*w)).collect::<Vec<_>>().join("+") )?;
         }
     }
+    writeln!(wr)?;
     Ok(())
 }
 
@@ -129,7 +144,7 @@ fn output_csv(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(), i
     for m in measurements  {
         write!(wr, "{},\"{}\",\"{}\",{},{},{},\"{}\"\n",
                m.timestamp, escape_csv(&m.executable), escape_csv(&m.arguments),
-               m.runs, m.time_mean, m.time_stddev, escape_csv(&m.note))?;
+               m.runs, m.mean, m.stddev, escape_csv(&m.note))?;
     }
     Ok(())
 }
@@ -149,7 +164,7 @@ fn output_json(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(), 
         write!(wr, " {{\"timestamp\": {}, \"executable\": \"{}\", \"arguments\": \"{}\",  \
                     \"runs\": {}, \"mean\": {:3.3}, \"stddev\": {:3.3}, \"note\": \"{}\"}}",
                m.timestamp, escape_json(&m.executable), escape_json(&m.arguments),
-               m.runs, m.time_mean, m.time_stddev, escape_json(&m.note) )?;
+               m.runs, m.mean, m.stddev, escape_json(&m.note) )?;
     }
 
     write!(wr, "\n]\n")?;
@@ -171,8 +186,8 @@ fn output_xml(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(), i
         write!(wr, "    <Arguments>{}</Arguments>\n", escape_xml(&m.arguments))?;
         write!(wr, "    <Note>{}</Note>\n", escape_xml(&m.note))?;
         write!(wr, "    <Runs>{}</Runs>\n", m.runs)?;
-        write!(wr, "    <Mean>{:3.3}</Mean>\n", m.time_mean)?;
-        write!(wr, "    <StdDev>{:3.3}</StdDev>\n", m.time_stddev)?;
+        write!(wr, "    <Mean>{:3.3}</Mean>\n", m.mean)?;
+        write!(wr, "    <StdDev>{:3.3}</StdDev>\n", m.stddev)?;
         write!(wr, "  </Measurement>\n")?;
     }
 

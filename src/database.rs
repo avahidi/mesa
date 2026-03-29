@@ -12,8 +12,8 @@ pub struct Entry {
     pub arguments: String,
     pub note: String,
     pub runs: usize,
-    pub time_mean: f64,
-    pub time_stddev: f64,
+    pub mean: f64,
+    pub stddev: f64,
 }
 
 impl FromStr for Entry {
@@ -30,8 +30,8 @@ impl FromStr for Entry {
             executable: parts[1].to_string(),
             arguments: parts[2].to_string(),
             runs: parts[3].parse().map_err(|e| format!("Invalid run count: {}", e))?,
-            time_mean: parts[4].parse().map_err(|e| format!("Invalid execution time: {}", e))?,
-            time_stddev: parts[5].parse().map_err(|e| format!("Invalid std dev: {}", e))?,
+            mean: parts[4].parse().map_err(|e| format!("Invalid stored mean: {}", e))?,
+            stddev: parts[5].parse().map_err(|e| format!("Invalid stored std dev: {}", e))?,
             note: parts[6].to_string(),
         })
     }
@@ -41,7 +41,7 @@ impl ToString for Entry {
     fn to_string(&self) -> String {
         format!("{}|{}|{}|{}|{}|{}|{}",
                 self.timestamp, self.executable, self.arguments, self.runs,
-                self.time_mean, self.time_stddev, self.note,
+                self.mean, self.stddev, self.note,
         )
     }
 }
@@ -119,7 +119,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn insert(&mut self, config: &Config, time_mean: f64, time_stddev: f64) -> Result<(), String> {
+    pub fn insert(&mut self, config: &Config, mean: f64, stddev: f64) -> Result<(), String> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| format!("Failed to get system time: {}", e))?
@@ -131,8 +131,8 @@ impl Database {
             arguments: config.arguments.join(" ").to_string(),
             note: config.note.clone(),
             runs: config.runs,
-            time_mean,
-            time_stddev ,
+            mean,
+            stddev ,
         };
 
         self.entries.push(new_entry);

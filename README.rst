@@ -13,7 +13,7 @@ Run any command with mesa to measure its execution time:
 
 
     $ mesa -- python3 fibonacci.py 30
-    
+
        Age    | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | ...
     ----------+------------+-----------------+------+----------+------------+-----
      just now |  python3   | fibonacci.py 30 |  1   |  0.1484  |   0.0000   | ...
@@ -77,13 +77,14 @@ Let's make a small optimisation:
           Age       | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | Change (%) |      Note
     ----------------+------------+-----------------+------+----------+------------+------------+----------------
         just now    |  python3   | fibonacci.py 30 |  10  |  0.1442  |   0.0186   |            | removed one if
-        0:01:54 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |    3.82    | original code
+        0:01:54 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |   -3.82    | original code
 
 Looks like that improved performance a bit. Note that this tiny 3.82% improvement would probably have drowned in system noise had we used ``time``...
 
 Iteration 2: adding memoization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+According to Wikipedia, memoization is an optimization technique used primarily to cache expensive function calls. Lets give it a try:
 
 .. code-block:: python
 
@@ -103,14 +104,16 @@ Iteration 2: adding memoization
           Age       | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | Change (%) |      Note
     ----------------+------------+-----------------+------+----------+------------+------------+----------------
         just now    |  python3   | fibonacci.py 30 |  10  |  0.0369  |   0.0007   |            | memoization
-        0:01:25 ago |  python3   | fibonacci.py 30 |  10  |  0.1442  |   0.0186   |   290.57   | removed one if
-        0:03:19 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |   305.47   | original code
+        0:01:25 ago |  python3   | fibonacci.py 30 |  10  |  0.1442  |   0.0186   |  -290.57   | removed one if
+        0:03:19 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |  -305.47   | original code
 
 That is a massive improvement of 305% over baseline and 291% over our previous version!
 But can we do even better? Maybe by removing recursion altogether?
 
 Iteration 3: eliminate recursion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Ask any CS student and they will confidently tell you that the non-recursive version will be vastly faster than anything else. Let's give it a try:
 
 .. code-block:: python
 
@@ -127,14 +130,37 @@ Iteration 3: eliminate recursion
           Age       | Executable |    Arguments    | Runs | Mean (s) | StdDev (s) | Change (%) |      Note
     ----------------+------------+-----------------+------+----------+------------+------------+----------------
         just now    |  python3   | fibonacci.py 30 |  10  |  0.0361  |   0.0005   |            | iterative
-        0:12:35 ago |  python3   | fibonacci.py 30 |  10  |  0.0369  |   0.0007   |    2.24    | memoization
-        0:14:00 ago |  python3   | fibonacci.py 30 |  10  |  0.1442  |   0.0186   |   299.32   | removed one if
-        0:15:54 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |   314.56   | original code
+        0:12:35 ago |  python3   | fibonacci.py 30 |  10  |  0.0369  |   0.0007   |   -2.24    | memoization
+        0:14:00 ago |  python3   | fibonacci.py 30 |  10  |  0.1442  |   0.0186   |  -299.32   | removed one if
+        0:15:54 ago |  python3   | fibonacci.py 30 |  10  |  0.1497  |   0.0232   |  -314.56   | original code
 
 
-Only 2.24%? This was a smaller improvement than anticipated, highlighting the importance of empirical measurement.
-This is exactly why I wrote mesa: to replace opinions and feelings with hard facts that can be stored in your git repository.
+Only 2.24% improvement? This was a much smaller improvement than anticipated. It turns out dictionaries in python are very efficient, which I did not know until this experiment.
 
+This highlights the importance of empirical measurements instead of making assumptions.
+And this is why I wrote mesa: to replace opinions and feelings with hard facts, in a format that can be stored in your git repository.
+
+
+Beyond measuring time
+---------------------
+
+It is possible to measure data beyond execution time, if this data happens to be part of the program output and the text before and after it is known.
+
+.. code-block:: console
+
+    $ python3 pathfinder.py bfs
+    Using algorithm 'bfs' we visited 32 nodes
+
+    $ mesa --capture="/visited/nodes/" -- python3 pathfinder.py bfs
+
+       Age    | Executable |     Arguments     | Runs |  Mean   | StdDev | Change (%) | Note
+    ----------+------------+-------------------+------+---------+--------+------------+------
+     just now |  python3   | pathfinder.py bfs |  1   | 32.0000 |        |            |
+
+
+The capture specifier has the format ``/before/after/`` (just like *sed*, the marker / can be any character).
+
+Note that *before* can also be a series of strings. For example to extract ``55`` from ``My uncle is 50 years old but my other uncle is 55 years old`` you can use ``--capture="/is/is/years/"``.
 
 Command-line options
 --------------------
@@ -143,20 +169,22 @@ Some key command-line options:
  * ``--runs=N``: number of runs. Mesa averages measurements across several runs to reduce system noise
  * ``--warmups=N``: number of warm ups before starting measurement
  * ``--database=filename.mesa``: measurements are stored in this plain-text file (default ``timing.mesa``)
- * ``--note="description"``: adds context to each measurement. You could for example set this to your commit identifier.
- * ``--output=filename.ext``: export results to this file. Format depends on the extension, see below 
+ * ``--note="description"``: adds context to each measurement. Hint: in CI set this to your commit id.
+ * ``--output=filename.ext``: export results to this file. Format depends on the extension, see below
+ * ``--capture=/before/after/``: Instead of time, capture value from program output
+ * ``--reverse``: High is better, can be useful when using ``--capture``
 
 
 .. code-block:: console
 
-    mesa --output=results.csv ...     # CSV format
-    mesa --output=results.json ...    # JSON format
-    mesa --output=results.xml ...     # XML format
-    mesa --output=stdout.json ...     # If file name is 'stdout', it will be written to console instead
+    $ mesa --output=results.csv ...     # CSV format
+    $ mesa --output=results.json ...    # JSON format
+    $ mesa --output=results.xml ...     # XML format
+    $ mesa --output=stdout.json ...     # If file name is 'stdout', it will be written to console instead
 
 The measurements database is a simple plain-text file:
 
-.. code-block::
+.. code-block:: text
 
     # mesa database|github.com/avahidi/mesa|version=1.2
     <timestamp>|<executable>|<arguments>|<runs>|<mean>|<stddev>|<note>
