@@ -1,7 +1,6 @@
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
-
 use mesa::*;
 
 fn execute_once(config: &Config) -> Result<f64, String> {
@@ -15,17 +14,13 @@ fn execute_once(config: &Config) -> Result<f64, String> {
     let output = command
         .output().map_err(|e| format!("Error executing program: {}", e))?;
 
-    // value is up here to not not include the verbose print time below
-    let value = match &config.capture {
-        Some(capture) => {
-            // we are measuring something else
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let cap = capture.extract(&stdout).ok_or("search pattern not found")?;
-            cap.as_str().trim().parse::<f64>()
-                .map_err(|_| format!("Captured text {} is not a valid number", cap))?
-        },
-        _ => start_time.elapsed().as_secs_f64()
-    };
+    // value is up here to not include the verbose print time below
+    let value = config.capture.as_ref()
+        .and_then(|c| c.extract(&String::from_utf8_lossy(&output.stdout)))
+        .map(|s| s.trim().parse::<f64>())
+        .transpose()
+        .map_err(|_| "search pattern not found".to_string())?
+        .unwrap_or_else(|| start_time.elapsed().as_secs_f64());
 
 
     if config.verbose {
@@ -41,24 +36,32 @@ fn execute_once(config: &Config) -> Result<f64, String> {
     }
 }
 
-fn execute(config: &Config, count: usize) -> Result<(f64, f64), String> {
+fn execute(config: &Config, count: usize, warmup: bool, prev_mean: Option<f64>, prev_std: Option<f64>) -> Result<(f64, f64), String> {
     if count == 0 {
         return Ok((0.0, 0.0));
     }
-    let durations: Vec<f64> = (0..count)
-        .map(|_| execute_once(config))
-        .collect::<Result<Vec<f64>, String>>()?;
 
-    let sum: f64 = durations.iter().sum();
+    let label = if warmup { "Warmup"} else { "Benchmark" };
+    let mut measurements = Vec::with_capacity(count);
+    let mut bar = Progress::new(count, label, config.quiet, prev_mean, prev_std);
+    for _ in 0..count {
+        bar.start();
+        let measurement = execute_once(config)?;
+        measurements.push(measurement);
+        bar.stop(measurement);
+    }
+    bar.finish(warmup);
+
+    let sum: f64 = measurements.iter().sum();
     let mean = sum / (count as f64);
-    let variance_sum: f64 = durations.iter().map(|&d| (d - mean).powi(2)).sum();
-    let std_dev = (variance_sum / (durations.len() as f64)).sqrt();
+    let variance_sum: f64 = measurements.iter().map(|&d| (d - mean).powi(2)).sum();
+    let std_dev = (variance_sum / (measurements.len() as f64)).sqrt();
     Ok((mean, std_dev))
 }
 
 
 fn main() -> Result<(), String> {
-    let config = Config::build().map_err(|e| {
+    let config = Config::from_env().map_err(|e| {
         Config::help();
         e
     })?;
@@ -68,14 +71,14 @@ fn main() -> Result<(), String> {
 
 
     // warmup round:
-    let (mean, std_dev) = execute(&config, config.runs_warmup)?;
-    if config.runs_warmup > 0 && config.verbose {
-        println!("After {} warmup rounds: mean={:3.3}s stddev={:3.3}",
-                 config.runs_warmup, mean, std_dev);
+    let (warmup_mean, warmup_std) = execute(&config, config.warmups, true, None, None)?;
+    if config.warmups > 0 && config.verbose {
+        eprintln!("After {} warmup rounds: mean={:3.3}s stddev={:3.3}",
+                 config.warmups, warmup_mean, warmup_std);
     }
 
-    // real rounds
-    let (mean, std_dev) = execute(&config, config.runs)?;
+    let (prev_mean, prev_std) = if config.warmups > 0 { (Some(warmup_mean), Some(warmup_std)) } else { (None, None) };
+    let (mean, std_dev) = execute(&config, config.runs, false, prev_mean, prev_std)?;
 
     // record the outcome
     db.insert(&config, mean, std_dev)?;

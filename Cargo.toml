@@ -2,3 +2,8 @@
 name = "mesa"
 version = "0.2.0"
 edition = "2021"
+
+description = "A command-line measurement utility"
+license = "GPL-2.0-only"
+repository = "https://github.com/avahidi/mesa"
+authors = ["Arash Vahidi"]

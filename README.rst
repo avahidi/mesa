@@ -172,28 +172,8 @@ The *before* part can be a sequence of strings. Each one must be matched in orde
 Consider for example the output ``My uncle is 50 years old but my other uncle is 55 years old``.
 To capture the first number you can use ``--capture="/is/years/"`` but to capture the second number you should use ``--capture="/is/is/years/"``.
 
-
-Command-line options
---------------------
-Some key command-line options:
-
- * ``--runs=N``: number of runs. Mesa averages measurements across several runs to reduce system noise
- * ``--warmups=N``: number of warm-ups before starting measurement
- * ``--database=filename.mesa``: measurements are stored in this plain-text file (default ``timing.mesa``)
- * ``--note="description"``: adds context to the measurement.
- * ``--output=filename.ext``: export results to this file. Format depends on the extension, see below
- * ``--capture=/before/after/``: Instead of time, capture value from program output
- * ``--reverse``: High is better, can be useful when using ``--capture``
-
-
-.. code-block:: console
-
-    $ mesa --output=results.csv ...     # CSV format
-    $ mesa --output=results.json ...    # JSON format
-    $ mesa --output=results.xml ...     # XML format
-    $ mesa --output=stdout.json ...     # If base name is 'stdout', it will be written to console instead
-    $ mesa --output="" ...              # No output
-
+Database format
+---------------
 
 The measurements database is a simple plain-text file:
 
@@ -204,7 +184,7 @@ The measurements database is a simple plain-text file:
     <timestamp>|<executable>|<arguments>|<runs>|<mean>|<stddev>|<note>
     ...
 
-This makes it easy to diff changes in git and understand your performance history over time.
+This makes it easy to review changes in git and understand your performance history over time.
 
 
 Building from Source

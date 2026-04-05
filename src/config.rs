@@ -14,17 +14,40 @@ pub struct Config {
     pub executable: String,
     pub arguments: Vec<String>,
     pub note: String,
-    pub capture : Option<capture::Capture>,
+    pub capture: Option<capture::Capture>,
     pub database: String,
     pub output: String,
     pub filter: FilterMode,
     pub show: usize,
     pub runs: usize,
-    pub runs_warmup: usize,
+    pub warmups: usize,
     pub ignore_failure: bool,
     pub dry_run: bool,
     pub verbose: bool,
-    pub reverse : bool,
+    pub reverse: bool,
+    pub quiet: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            executable: String::new(),
+            arguments: Vec::new(),
+            note: String::new(),
+            capture: None,
+            database: String::from("timing.mesa"),
+            output: String::from("stdout.txt"),
+            filter: FilterMode::Exe,
+            show: 8,
+            runs: 3,
+            warmups: 0,
+            ignore_failure: false,
+            dry_run: false,
+            verbose: false,
+            reverse: false,
+            quiet: false,
+        }
+    }
 }
 
 impl Config {
@@ -43,38 +66,30 @@ Output options
     --output=<filename>            output file (CSV/JSON/TXT/XML/...) or stdout
     --show=<number>                max number of items to show
     --filter=<mode>                filter mode: all, exe, exact
-    --reverse                      bigger is better, makes only sense with capture
 
 Record options
     --dry-run                      do not save this run to the database
+    --reverse                      bigger is better, makes only sense with capture
     --capture=...                  capture from output, instead of measuring time
 
 Misc
     --verbose                      be more verbose
-");
+    -q, --quiet                    suppress progress display
 
+Examples:
+    {me} --note=\"important stuff\" --warmups=5 --runs=10 --output=stdout.json -- sleep 1
+    {me} --runs=1 --capture=\"/bogomips/://\" --output=stdout.table -- cat /proc/cpuinfo
+");
     }
-    pub fn build() -> Result<Config, String> {
+
+    pub fn from_env() -> Result<Config, String> {
         let args: Vec<_> = env::args().skip(1).collect();
         Config::new(args)
     }
 
     fn new(args: Vec<String>) -> Result<Config, String> {
-        // default values
-        let mut database = String::from("timing.mesa");
-        let mut output = String::from("stdout.txt");
-        let mut note = String::from("");
-        let mut capture = None;
-        let mut filter = FilterMode::Exe;
-        let mut show = 8;
-        let mut runs = 3;
-        let mut runs_warmup = 0;
-        let mut ignore_failure = false;
-        let mut dry_run = false;
-        let mut verbose = false;
-        let mut reverse = false;
+        let mut config = Config::default();
 
-        // separate our own and targets arguments
         let sep_pos = args.iter().position(|arg| arg == "--");
         let mine = if let Some(pos) = sep_pos {
             &args[..pos]
@@ -82,29 +97,27 @@ Misc
             &args[..]
         };
 
-        // parse our own arguments
         for arg in mine {
             if let Some((key, value)) = arg.split_once('=') {
                 match key {
-                    "-d" | "--database" => database = value.to_string(),
-                    "-o" | "--output" => output = value.to_string(),
-                    "--note" => note = value.to_string(),
-
-                    "-f" | "--filter" => filter = match value {
+                    "-d" | "--database" => config.database = value.to_string(),
+                    "-o" | "--output" => config.output = value.to_string(),
+                    "--note" => config.note = value.to_string(),
+                    "-f" | "--filter" => config.filter = match value {
                         "all" => FilterMode::All,
                         "exe" => FilterMode::Exe,
                         "exact" => FilterMode::Exact,
                         _ => return Err(format!("Unknown mode: {}", arg)),
                     },
                     "-s" | "--show" =>
-                        show = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
+                        config.show = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
                     "-r" | "--runs" =>
-                        runs = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
+                        config.runs = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
                     "-w" | "--warmups" =>
-                        runs_warmup = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
+                        config.warmups = value.parse::<usize>().map_err(|_| format!("Bad number: {}", arg))?,
                     "--capture" => {
                         let pattern = capture::parse(value)?;
-                        capture = Some(pattern)
+                        config.capture = Some(pattern)
                     },
                     _ => return Err(format!("Unknown parameter: {}", arg)),
                 }
@@ -112,45 +125,31 @@ Misc
                 match &arg[..] {
                     "-h" | "--help" => {
                         Config::help();
-                        std::process::exit(0); // Exit successfully
+                        std::process::exit(0);
                     },
-                    "-i" | "--ignore" => ignore_failure = true,
-                    "-N" | "--dry-run" => dry_run = true,
-                    "-V" | "--verbose" => verbose = true,
-                    "--reverse" => reverse = true,
+                    "-i" | "--ignore" => config.ignore_failure = true,
+                    "-N" | "--dry-run" => config.dry_run = true,
+                    "-V" | "--verbose" => config.verbose = true,
+                    "--reverse" => config.reverse = true,
+                    "-q" | "--quiet" => config.quiet = true,
                     _ => return Err(format!("Unknown flag: {}", arg)),
                 }
             }
         }
 
-        // Verify target arguments
         let yours = if let Some(pos) = sep_pos {
             &args[pos + 1..]
         } else {
-            &[] // No separator means no program args.
+            &[]
         };
 
         if yours.is_empty() {
             return Err("The target program is missing. Use '--' to separate `mesa` options from the program to be executed.".to_string());
         }
 
-        // Step 5: If all checks pass, build and return the final config.
-        Ok(Config {
-            executable: yours[0].to_string(),
-            arguments: yours[1..].to_vec(),
-            note,
-            database,
-            output,
-            filter,
-            show,
-            runs,
-            runs_warmup,
-            ignore_failure,
-            dry_run,
-            verbose,
-            capture,
-            reverse,
-        })
+        config.executable = yours[0].to_string();
+        config.arguments = yours[1..].to_vec();
+        Ok(config)
     }
 }
 
@@ -194,8 +193,8 @@ mod tests {
         assert_eq!(config.filter, FilterMode::All);
         assert_eq!(config.show, 10);
         assert_eq!(config.runs, 17);
-        assert_eq!(config.ignore_failure, true);
-        assert_eq!(config.dry_run, true);
+        assert!(config.ignore_failure);
+        assert!(config.dry_run);
         assert_eq!(config.note, "this is just a test");
         assert_eq!(config.executable, "proggy");
         assert_eq!(config.arguments, vec!["arg1"]);

@@ -101,7 +101,7 @@ impl Database {
             .map_err(|e| format!("Failed to parse entry: {}", e))?;
 
         // make sure input is sorted, in case someone edited database by hand
-        self.entries.sort_by(|a, b| a.timestamp.cmp(&b.timestamp)) ;
+        self.entries.sort_by_key(|e| e.timestamp);
 
         Ok(())
     }
@@ -128,11 +128,11 @@ impl Database {
         let new_entry = Entry {
             timestamp,
             executable: config.executable.clone(),
-            arguments: config.arguments.join(" ").to_string(),
+            arguments: config.arguments.join(" "),
             note: config.note.clone(),
             runs: config.runs,
             mean,
-            stddev ,
+            stddev,
         };
 
         self.entries.push(new_entry);
@@ -140,7 +140,7 @@ impl Database {
     }
 
     pub fn search(&self, cfg: &Config) -> Vec<&Entry> {
-        let arguments = cfg.arguments.join(" ").to_string();
+        let arguments = cfg.arguments.join(" ");
         self.entries.iter().rev() // rev() so we have them in the order received
             .filter(|entry| match cfg.filter {
                 FilterMode::All => true,

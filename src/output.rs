@@ -21,7 +21,7 @@ pub fn write_output(output: &str, measurements: Vec<&Entry>, reverse: bool) -> R
     let stem = path.file_stem().and_then(OsStr::to_str).unwrap_or("");
     let ext = path.extension().and_then(OsStr::to_str).unwrap_or("");
 
-    let terminal = stem == "" || stem == "stdout";
+    let terminal = stem.is_empty() || stem == "stdout";
 
     let writer = if terminal {
         Box::new(io::stdout()) as Box<dyn Write>
@@ -87,17 +87,13 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>, 
         modifier.to_string()
     }));
 
-    columns[1].extend(measurements.iter().map(|entry| entry.age(now)));
-    columns[2].extend(measurements.iter().map(|entry| format!("{} {}", entry.executable, entry.arguments)));
-    columns[3].extend(measurements.iter().map(|entry| entry.runs.to_string()));
-    columns[4].extend(measurements.iter().map(|entry| format!("{:.4}", entry.mean)));
-    columns[5].extend(measurements.iter().map(|entry| {
-        if entry.runs > 1 {
-            format!("{:.4}", entry.stddev)
-        } else {
-            "".to_string() // no point printing stddev if we only had one run...
-        }
-    }));
+    columns[1].extend(measurements.iter().map(|e| e.age(now)));
+    columns[2].extend(measurements.iter().map(|e| format!("{} {}", e.executable, e.arguments)));
+    columns[3].extend(measurements.iter().map(|e| e.runs.to_string()));
+    columns[4].extend(measurements.iter().map(|e| format!("{:.4}", e.mean)));
+    columns[5].extend(measurements.iter().map(|e|
+        (e.runs > 1).then(|| format!("{:.4}", e.stddev)).unwrap_or_default()
+    ));
 
     columns[6].extend(measurements.iter().enumerate().map(|(i, entry)| {
         if i == 0 {
@@ -136,8 +132,8 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>, 
 }
 
 // naive CSV escape string
-fn escape_csv(s : &String) -> String {
-    s.replace("\"", "\"\"")
+fn escape_csv(s : &str) -> String {
+    s.replace(",", ".").replace("\"", "\\\"").replace("\n", " ")
 }
 
 fn output_csv(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(), io::Error> {
@@ -152,7 +148,7 @@ fn output_csv(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(), i
 }
 
 // naive JSON escape string attempt...
-fn escape_json(s : &String) -> String {
+fn escape_json(s : &str) -> String {
     s.replace("\"", "\\\"")
 }
 
@@ -174,7 +170,7 @@ fn output_json(mut wr: Box<dyn Write>, measurements: Vec<&Entry>) -> Result<(), 
 }
 
 // my naive XML escape attempt...
-fn escape_xml(s : &String) -> String {
+fn escape_xml(s : &str) -> String {
     s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 }
 

@@ -2,6 +2,8 @@
 
 set -e
 
+
+cd .. && cargo build && cd examples # cargo -C <dir> is still unstable
 rm -f *.mesa
 
 # 1

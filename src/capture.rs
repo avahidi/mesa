@@ -1,5 +1,4 @@
 
-
 #[derive(Debug)]
 pub struct Capture {
     prefix: Vec<String>,
@@ -18,10 +17,9 @@ pub fn parse(s: &str) -> Result<Capture, String> {
             if result.len() == 1 {
                 return Ok( Capture{prefix: result, suffix: String::new() })
             }
-            if let Some( (last,rest) ) = result.split_last() {
-                return Ok( Capture{prefix: rest.to_vec(), suffix: last.clone() })
+            if let Some((last, rest)) = result.split_last() {
+                return Ok(Capture { prefix: rest.to_vec(), suffix: last.clone() });
             }
-            println!("result: {:?}", result);
         }
     }
     Err("Capture format is ?prefix?...?suffix? where '?' is marker".to_string() )
@@ -38,9 +36,9 @@ impl Capture {
         let suffix_pos = if self.suffix.is_empty() {
             text[position..].find("\n").unwrap_or(text.len() - position)
         } else {
-            text[position..].find(& self.suffix)?
+            text[position..].find(&self.suffix)?
         };
-        Some(text[position..position + suffix_pos].to_string())
+        Some(text[position..position + suffix_pos].trim().to_string())
     }
 }
 
@@ -56,7 +54,7 @@ mod tests {
 
     #[test]
     fn test_extract_short() {
-        let capture = parse("/is /").unwrap();
+        let capture = parse("/is/").unwrap();
         let text = "My uncle is old";
         let result = capture.extract(&text);
         assert_eq!(result, Some("old".to_string()));
@@ -64,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_extract_simple() {
-        let capture = parse("/is / years/").unwrap();
+        let capture = parse("/is/years/").unwrap();
         let text = "My uncle is 100 years old";
         let result = capture.extract(&text);
         assert_eq!(result, Some("100".to_string()));
@@ -72,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_extract_series() {
-        let capture = parse("/is/is / years/").unwrap();
+        let capture = parse("/is/is/years/").unwrap();
         let text = "My uncle is 100 years old, but my other uncle is 110 years old.";
         let result = capture.extract(&text);
         assert_eq!(result, Some("110".to_string()));
