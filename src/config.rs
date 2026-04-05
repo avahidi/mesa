@@ -67,7 +67,7 @@ Misc
         let mut capture = None;
         let mut filter = FilterMode::Exe;
         let mut show = 8;
-        let mut runs = 1;
+        let mut runs = 3;
         let mut runs_warmup = 0;
         let mut ignore_failure = false;
         let mut dry_run = false;

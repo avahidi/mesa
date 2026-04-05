@@ -49,8 +49,7 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>, 
     let mut columns: Vec<Vec<String>> = vec![
         vec!["".to_string()], // New column for color
         vec!["Age".to_string()],
-        vec!["Executable".to_string()],
-        vec!["Arguments".to_string()],
+        vec!["Program".to_string()],
         vec!["Runs".to_string()],
         vec!["Mean".to_string()],
         vec!["StdDev".to_string()],
@@ -89,11 +88,10 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>, 
     }));
 
     columns[1].extend(measurements.iter().map(|entry| entry.age(now)));
-    columns[2].extend(measurements.iter().map(|entry| entry.executable.clone()));
-    columns[3].extend(measurements.iter().map(|entry| entry.arguments.clone()));
-    columns[4].extend(measurements.iter().map(|entry| entry.runs.to_string()));
-    columns[5].extend(measurements.iter().map(|entry| format!("{:.4}", entry.mean)));
-    columns[6].extend(measurements.iter().map(|entry| {
+    columns[2].extend(measurements.iter().map(|entry| format!("{} {}", entry.executable, entry.arguments)));
+    columns[3].extend(measurements.iter().map(|entry| entry.runs.to_string()));
+    columns[4].extend(measurements.iter().map(|entry| format!("{:.4}", entry.mean)));
+    columns[5].extend(measurements.iter().map(|entry| {
         if entry.runs > 1 {
             format!("{:.4}", entry.stddev)
         } else {
@@ -101,14 +99,18 @@ fn output_table(mut wr: Box<dyn Write>, color: bool, measurements: Vec<&Entry>, 
         }
     }));
 
-    columns[7].extend(measurements.iter().enumerate().map(|(i, entry)| {
+    columns[6].extend(measurements.iter().enumerate().map(|(i, entry)| {
         if i == 0 {
             " ".to_string() // Empty string for the first entry
         } else {
             format!("{:.2}", ((first_mean - entry.mean) / first_mean) * 100.0)
         }
     }));
-    columns[8].extend(measurements.iter().map(|entry| entry.note.to_string()));
+    columns[7].extend(measurements.iter().map(|entry| entry.note.to_string()));
+
+    // remove any column that are empty:
+    columns.retain(|col| !col.iter().skip(1).all(|s| s.trim().is_empty()));
+
 
     // to print a nice table we will need to know max width for each column
     let widths: Vec<usize> = columns.iter()
