@@ -3,7 +3,8 @@ mesa
 
 *mesa* is a command line utility for recording and comparing execution times. Instead of manually measuring performance with ``time``, mesa automates measurements across multiple runs and tracks your changes in a human-readable database.
 
-*mesa* is similar to `hyperfine`_, but focuses more on long-term tracking.
+*mesa* is similar to `hyperfine`_, but focuses more on long-term performance tracking.
+*mesa* is written in Rust, is very small and has zero dependencies.
 
 .. _hyperfine: https://github.com/sharkdp/hyperfine
 
@@ -24,7 +25,7 @@ Run any command with mesa to measure its execution time:
 
 
 
-That's it. Mesa records the time, and you can run the same command again later to compare.
+That's it. Mesa records the time in the file ``timing.mesa``, and you can run the same command again later to compare changes in execution time.
 
 
 A slightly longer example: tracking Fibonacci improvements
@@ -49,7 +50,7 @@ You could run ``time`` manually after each change, but this is tedious. And a si
 The Solution
 ~~~~~~~~~~~~
 
-Mesa solves this by automating measurements and averaging multiple runs. Start by establishing a baseline with your original code:
+*mesa* solves this by automating measurements and averaging multiple runs. Start by establishing a baseline with your original code:
 
 
 .. code-block:: console
@@ -61,13 +62,13 @@ Mesa solves this by automating measurements and averaging multiple runs. Start b
      just now | python3 fibonacci1.py 30 |  10  | 0.1509 | 0.0190 | original code
 
 
-Mesa ran the command 10 times, averaging the results to reduce noise. The measurements are now stored in ``fibonacci.mesa`` for future comparisons. Notice that both mean and standard deviation of execution time are recorded.
+*mesa* ran the command 10 times, averaging the results to reduce noise.
 
 
-Iteration 1: a tiny improvement
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Iteration 1: if we had one less if...
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Let's make a small optimisation:
+Let's make a small optimisation by replacing the two if:s with one:
 
 
 .. code-block:: python
@@ -121,7 +122,7 @@ But can we do even better? Maybe by removing recursion altogether?
 Iteration 3: eliminate recursion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Ask any CS student and they will confidently tell you that the non-recursive version will be vastly faster than anything else. Let's give it a try:
+Ask any Computer Science student and they will confidently tell you that the non-recursive version will be vastly faster than anything else. Let's give it a try:
 
 .. code-block:: python
 
@@ -143,10 +144,10 @@ Ask any CS student and they will confidently tell you that the non-recursive ver
         0:01:19 ago | python3 fibonacci1.py 30 |  10  | 0.1509 | 0.0190 |  -436.15   | original code
 
 
-This was a much smaller improvement than anticipated. It turns out dictionaries in python are very efficient, which I did not know until this experiment.
+This was a much smaller improvement than anticipated. It turns out that dictionaries in python are very efficient, which I did not know until this experiment.
 
 This highlights the importance of empirical measurements instead of making assumptions.
-And this is why I wrote mesa: to replace opinions and feelings with hard facts, in a format that can be stored in your git repository.
+And this is why I wrote mesa: to replace opinions and feelings with hard facts and commit it to your git repository.
 
 
 Beyond measuring time
@@ -184,19 +185,17 @@ The measurements database is a simple plain-text file:
     <timestamp>|<executable>|<arguments>|<runs>|<mean>|<stddev>|<note>
     ...
 
-This makes it easy to review changes in git and understand your performance history over time.
-
 
 Building from Source
 ---------------------
 
-*mesa* is written in Rust with no external dependencies:
 
 .. code-block:: console
 
     git clone https://github.com/avahidi/mesa
     cd mesa
     cargo build
+
     cargo run -- -- sleep 1 # test it...
 
 
